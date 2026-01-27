@@ -1,0 +1,37 @@
+name: Daily News Automation
+on:
+  schedule:
+    - cron: '30 2 * * *' # Indian Time subah 8:00 AM ke liye
+  workflow_dispatch: # Manual run karne ka button
+
+jobs:
+  run-scripts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+
+      - name: Run Automation
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          # Yahan baaki WP keys bhi add karein agar zarurat ho
+        run: |
+          python agents/news_fetcher.py
+          python agents/ai_rewriter.py
+
+      - name: Commit Database Changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add database.db
+          git commit -m "Auto-update database" || echo "No changes"
+          git push

@@ -1,7 +1,0 @@
-crewai
-langchain_groq
-streamlit
-python-dotenv
-requests
-beautifulsoup4
-lxml

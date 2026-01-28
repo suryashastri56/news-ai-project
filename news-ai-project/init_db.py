@@ -20,7 +20,7 @@ def initialize_database():
             raw_content TEXT,            -- Fetcher se aane wala raw content
             rewritten_content TEXT,      -- AI dwara likha gaya English content
             image_url TEXT,              -- AI image link
-            category TEXT DEFAULT 'General', -- News ki category (Tech, Sports, etc.)
+            category TEXT DEFAULT 'General','Tech','Sports','Business','Science', -- News ki category (Tech, Sports, etc.)
             seo_description TEXT,        -- Meta description for SEO
             seo_tags TEXT,               -- Keywords/Tags
             status TEXT DEFAULT 'pending' -- Article status (pending, published, rejected)

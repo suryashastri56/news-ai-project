@@ -22,13 +22,20 @@ def init_db():
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     cursor.execute('''CREATE TABLE IF NOT EXISTS news_articles (
-        id INTEGER PRIMARY KEY, title TEXT, raw_content TEXT, rewritten_content TEXT,
-        image_url TEXT, seo_description TEXT, seo_tags TEXT, category TEXT, status TEXT DEFAULT 'pending'
+        id INTEGER PRIMARY KEY AUTOINCREMENT, 
+        title TEXT, 
+        raw_content TEXT, 
+        rewritten_content TEXT,
+        image_url TEXT, 
+        seo_description TEXT, 
+        seo_tags TEXT, 
+        category TEXT, 
+        status TEXT DEFAULT 'pending'
     )''')
     conn.commit()
     conn.close()
 
-init_db() # App start hote hi table check karega
+init_db() # App start hote hi table check aur create karega
 
 # WordPress Publishing Logic
 def publish_to_wp(title, content, img_url, excerpt, cat):
@@ -42,6 +49,11 @@ def publish_to_wp(title, content, img_url, excerpt, cat):
 
 st.title("🗞️ AI News Content Manager")
 
+# Sidebar for manual database check
+if st.sidebar.button("🛠️ Repair Database"):
+    init_db()
+    st.sidebar.success("Database Fixed!")
+
 # Tabs for organization
 tab1, tab2, tab3 = st.tabs(["⏳ Pending Review", "✅ Published", "❌ Rejected"])
 
@@ -52,8 +64,11 @@ if os.path.exists(DB_PATH):
     with tab1:
         # SQL error fixed by verifying table exists
         cursor.execute("SELECT id, title, rewritten_content, image_url, seo_description, seo_tags, category FROM news_articles WHERE status='pending' AND rewritten_content IS NOT NULL")
-        for pid, title, content, img, desc, tags, cat in cursor.fetchall():
-            with st.expander(f"📦 {title}", expanded=True):
+        posts = cursor.fetchall()
+        if not posts:
+            st.info("Abhi koi pending news nahi hai.")
+        for pid, title, content, img, desc, tags, cat in posts:
+            with st.expander(f"📦 {title}", expanded=False):
                 final_title = st.text_input("Edit Headline:", value=title, key=f"t{pid}")
                 c1, c2 = st.columns([1, 2])
                 with c1:
@@ -61,10 +76,9 @@ if os.path.exists(DB_PATH):
                     f_desc = st.text_area("Meta Description:", str(desc), key=f"d{pid}")
                 with c2:
                     f_content = st.text_area("Body:", str(content), height=300, key=f"c{pid}")
-                    if st.button("🚀 Publish to WordPress", key=f"pb{pid}"):
+                    if st.button("🚀 Publish Now", key=f"pb{pid}"):
                         if publish_to_wp(final_title, f_content, img, f_desc, cat):
                             cursor.execute("UPDATE news_articles SET status='published' WHERE id=?", (pid,))
                             conn.commit()
-                            st.success("Article Live!")
                             st.rerun()
     conn.close()

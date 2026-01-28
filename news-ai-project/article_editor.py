@@ -20,7 +20,15 @@ def publish_to_wp(title, content, img_url, excerpt, cat_name):
         }
         
         # Category Mapping
-        mapping = {"Technology": 1, "Business": 6, "India": 2, "Sports": 7, "Health": 14, "Entertainment": 13}
+        mapping = { "Business": 6,
+        "Entertainment":13,
+        "Health":14, 
+        "Sports": 7,
+        "Science": 8,
+        "General": 1,
+        "World":10,
+        "India":2
+}
         cat_id = mapping.get(cat_name, 1)
 
         # HTML Body with Justified Content

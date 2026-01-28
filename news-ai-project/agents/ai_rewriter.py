@@ -10,6 +10,22 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, '..', 'database.db')
 client = Groq(api_key=st.secrets["GROQ_API_KEY"])
 
+# ai_rewriter.py ke andar ye badlav karein:
+from agents.image_generator import generate_article_image # Nayi file import ki
+
+# ... (baaki code same rahega) ...
+
+# AI response se image_prompt milne ke baad:
+img_prompt = safe_parse(res, "IMAGE_PROMPT")
+final_image_url = generate_article_image(img_prompt) # Image generator call kiya
+
+# Database mein update karein
+cursor.execute("""
+    UPDATE news_articles 
+    SET title=?, rewritten_content=?, category=?, seo_description=?, seo_tags=?, image_url=? 
+    WHERE id=?
+""", (ntitle, ncontent, cat, meta, tags, final_image_url, art_id)) #
+
 def safe_parse(text, label, next_label=None):
     try:
         pattern = f"{label}:(.*?)(?={next_label}:|$)" if next_label else f"{label}:(.*)"

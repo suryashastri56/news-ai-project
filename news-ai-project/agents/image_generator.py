@@ -1,17 +1,17 @@
-import os
+import streamlit as st
 
 def generate_article_image(image_prompt):
-    """
-    Article ke description se unique AI image URL generate karna
-    """
-    if not image_prompt or image_prompt == "Not Generated":
-        # Default image agar prompt miss ho jaye
-        return "https://images.unsplash.com/photo-1504711432869-5d39a7402ca2?q=80&w=1000"
-    
-    # Clean the prompt for URL
-    clean_prompt = image_prompt.replace(" ", "_").replace("'", "").replace('"', "")
-    
-    # Using Pollinations AI with Flux model for high quality
-    image_url = f"https://pollinations.ai/p/{clean_prompt}?width=1024&height=768&model=flux&nologo=true&seed=88"
-    
-    return image_url
+    """Content se related AI image URL banana"""
+    try:
+        if not image_prompt or "Not Generated" in image_prompt:
+            # Fallback image agar prompt fail ho jaye
+            return "https://pollinations.ai/p/news_breaking_news_global_updates?width=1024&height=768&seed=42"
+        
+        # URL friendly prompt banana
+        clean_prompt = image_prompt.replace(" ", "_").strip()
+        
+        # Pollinations Flux Model
+        image_url = f"https://pollinations.ai/p/{clean_prompt}?width=1024&height=768&model=flux&nologo=true"
+        return image_url
+    except:
+        return "https://pollinations.ai/p/news_headline_background?width=1024&height=768"

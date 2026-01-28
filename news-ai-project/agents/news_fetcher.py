@@ -1,14 +1,15 @@
 import sqlite3
 import os
+import re
+import time
+import streamlit as st # Secrets access karne ke liye
 from groq import Groq
-from dotenv import load_dotenv
 
 # Path setups
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, '..', 'database.db')
-load_dotenv(os.path.join(BASE_DIR, '..', '.env'))
 
-client = Groq(api_key=os.getenv("GROQ_API_KEY"))
+client = Groq(api_key=st.secrets("GROQ_API_KEY"))
 
 def rewrite_news():
     conn = sqlite3.connect(DB_PATH)

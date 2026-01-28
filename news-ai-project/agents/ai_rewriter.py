@@ -32,22 +32,26 @@ def rewrite_news():
 
     for art_id, old_title, raw_content in articles:
         print(f"✍️ Rewriting: {old_title}")
+
         prompt = f"""
-        Act as a professional independent news editor. 
-        TITLE: {old_title}
-        DATA: {raw_content}
-        RULES: 
-        1. NEW_TITLE: Create a catchy headline.
-        2. CONTENT: Write a 500-word article. 
-        3. NO REFERENCES: Strictly no mention of Reuters, TOI, Mint, etc.
-        FORMAT:
-        NEW_TITLE: [Headline]
-        CONTENT: [Article Body]
-        CATEGORY: [Tech/Business/Sports/Entertainment/Health]
-        META: [SEO Description]
-        TAGS: [8 keywords]
-        IMAGE_PROMPT: [15 word photo prompt]
-        """
+Act as a professional news editor. 
+ORIGINAL TITLE: {old_title}
+SOURCE DATA: {raw_content}
+
+STRICT EDITORIAL RULES:
+1. WORD COUNT: Write exactly between 300 to 400 words.
+2. NEW_TITLE: Create a catchy, SEO-friendly headline.
+3. NO REFERENCES: Do not mention any news agencies (Reuters, TOI, etc.).
+4. STRUCTURE: Use short paragraphs for better readability.
+
+FORMAT:
+NEW_TITLE: [Headline]
+CONTENT: [300-400 words article body]
+CATEGORY: [Tech/Business/Sports/Entertainment/Health]
+META: [160 char SEO description]
+TAGS: [8 keywords]
+IMAGE_PROMPT: [15 word photo description]
+        
         try:
             # Model switched to 8b-instant for higher limits
             res = client.chat.completions.create(

@@ -1,69 +1,58 @@
 import streamlit as st
 import sqlite3
 import os
+from sidebar_actions import render_sidebar # Nayi file include ki
 
-# --- PATHS ---
+# --- PAGE CONFIG ---
+st.set_page_config(page_title="News Admin Pro", layout="wide")
+
+# --- SIDEBAR BUTTONS ---
+render_sidebar() # Ye line saare buttons ko wapas le aayegi
+
+# --- MAIN DASHBOARD ---
+st.title("🗞️ News AI Content Manager")
+
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'database.db')
 
-st.set_page_config(page_title="SEO News Admin", layout="wide")
-
-# Sidebar for manual repair
-if st.sidebar.button("🛠️ Repair DB & Columns"):
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    # Table ko naye columns ke saath ensure karna
-    cursor.execute('''CREATE TABLE IF NOT EXISTS news_articles (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, raw_content TEXT, 
-        rewritten_content TEXT, image_url TEXT, seo_description TEXT, 
-        seo_tags TEXT, category TEXT, status TEXT DEFAULT 'pending'
-    )''')
-    conn.commit()
-    conn.close()
-    st.sidebar.success("Database structure fixed!")
-
-st.title("🗞️ News SEO Manager")
+tab1, tab2, tab3 = st.tabs(["⏳ Pending", "✅ Published", "❌ Rejected"])
 
 if os.path.exists(DB_PATH):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    
-    # FIX: Saare columns ko SELECT query mein add kiya
-    cursor.execute("""
-        SELECT id, title, rewritten_content, image_url, seo_description, seo_tags, category 
-        FROM news_articles 
-        WHERE status='pending' AND rewritten_content IS NOT NULL
-    """)
-    posts = cursor.fetchall()
-    
-    if not posts:
-        st.info("Pending articles with AI content nahi mile. Pehle 'Rewrite' chalaein.")
-    
-    for pid, title, content, img, desc, tags, cat in posts:
-        with st.expander(f"📦 [{cat}] - {title}", expanded=True):
-            col1, col2 = st.columns([1, 2])
-            
-            with col1:
-                # Featured Image
-                if img and img != "Not Generated":
-                    st.image(img, width="stretch", caption="AI Image")
-                else:
-                    st.warning("🖼️ Image URL missing.")
+
+    # PENDING TAB
+    with tab1:
+        cursor.execute("SELECT id, title, rewritten_content, image_url, category, seo_description, seo_tags FROM news_articles WHERE status='pending' AND rewritten_content IS NOT NULL")
+        for pid, title, content, img, cat, desc, tags in cursor.fetchall():
+            with st.expander(f"📦 [{cat}] - {title}"):
+                st.image(img, width="stretch") if img else None
+                f_title = st.text_input("Headline", value=title, key=f"t{pid}")
+                f_content = st.text_area("Content", value=content, height=300, key=f"c{pid}")
                 
-                # SEO Meta Fields
-                st.subheader("🛠️ SEO & Meta")
-                new_cat = st.text_input("Category", value=str(cat), key=f"cat_{pid}")
-                new_desc = st.text_area("Meta Description", value=str(desc), key=f"desc_{pid}")
-                new_tags = st.text_input("SEO Tags", value=str(tags), key=f"tags_{pid}")
-                
-            with col2:
-                # Content Editor
-                st.subheader("🖋️ Article Body")
-                new_title = st.text_input("Edit Headline", value=title, key=f"tit_{pid}")
-                new_content = st.text_area("Edit Body", value=content, height=400, key=f"con_{pid}")
-                
-                if st.button("🚀 Publish", key=f"pub_{pid}", type="primary"):
-                    # WordPress publishing logic here...
+                col1, col2 = st.columns(2)
+                if col1.button("🚀 Publish", key=f"p{pid}", type="primary"):
+                    # WordPress publishing logic yahan call karein
                     cursor.execute("UPDATE news_articles SET status='published' WHERE id=?", (pid,))
                     conn.commit()
                     st.rerun()
+                if col2.button("❌ Reject", key=f"r{pid}"):
+                    cursor.execute("UPDATE news_articles SET status='rejected' WHERE id=?", (pid,))
+                    conn.commit()
+                    st.rerun()
+
+    # PUBLISHED TAB
+    with tab2:
+        cursor.execute("SELECT title, category FROM news_articles WHERE status='published' ORDER BY id DESC")
+        for t, c in cursor.fetchall():
+            st.success(f"✔️ **[{c}]** {t}")
+
+    # REJECTED TAB
+    with tab3:
+        cursor.execute("SELECT id, title FROM news_articles WHERE status='rejected' ORDER BY id DESC")
+        for rid, t in cursor.fetchall():
+            st.error(f"❌ {t}")
+            if st.button("Restore", key=f"res{rid}"):
+                cursor.execute("UPDATE news_articles SET status='pending' WHERE id=?", (rid,))
+                conn.commit(); st.rerun()
+
     conn.close()

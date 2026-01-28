@@ -1,7 +1,7 @@
 name: Daily News Automation
 on:
   schedule:
-    - cron: '30 2 * * *' # Indian Time subah 8:00 AM ke liye
+    - cron: "*/5 * * * *" # Indian Time subah 8:00 AM ke liye
   workflow_dispatch: # Manual run karne ka button
 
 jobs:

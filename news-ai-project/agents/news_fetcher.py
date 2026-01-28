@@ -1,69 +1,56 @@
 import sqlite3
+import requests
+from bs4 import BeautifulSoup
 import os
-import re
-import time
-import streamlit as st # Secrets access karne ke liye
-from groq import Groq
+import streamlit as st
 
-# Path setups
+# Path configuration for Streamlit Cloud
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, '..', 'database.db')
 
-client = Groq(api_key=st.secrets("GROQ_API_KEY"))
-
-def rewrite_news():
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-
-    cursor.execute("SELECT id, title, raw_content FROM news_articles WHERE status='pending' AND rewritten_content IS NULL")
-    articles = cursor.fetchall()
-
-    for art_id, title, raw_content in articles:
-        print(f"✍️ Processing: {title}")
+def fetch_news():
+    st.write("🚀 News fetching shuru ho rahi hai...")
+    
+    # Diverse news sources
+    sources = {
+        "General": "https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en",
+        "Technology": "https://news.google.com/rss/search?q=technology&hl=en-IN&gl=IN&ceid=IN:en",
+        "Business": "https://news.google.com/rss/search?q=business&hl=en-IN&gl=IN&ceid=IN:en",
+        "Sports": "https://news.google.com/rss/search?q=sports&hl=en-IN&gl=IN&ceid=IN:en",
+        "India": "https://news.google.com/rss/search?q=india&hl=en-IN&gl=IN&ceid=IN:en"
+    }
+    
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        total_count = 0
         
-        prompt = f"""
-        Headline: {title}
-        Original: {raw_content}
-        Task: Rewrite in English (300 words), assign category [Technology, Business, Sports, Entertainment, Health], and provide SEO meta.
-        
-        Format:
-        CONTENT: [Article text]
-        CATEGORY: [Select one]
-        META: [Description]
-        TAGS: [5 keywords]
-        PROMPT: [Image prompt]
-        """
-
-        try:
-            chat_completion = client.chat.completions.create(
-                messages=[{"role": "user", "content": prompt}],
-                model="llama-3.3-70b-versatile",
-            )
-            response = chat_completion.choices[0].message.content
-
-            # Safer Parsing Logic
-            content = response.split("CONTENT:")[1].split("CATEGORY:")[0].strip()
-            category = response.split("CATEGORY:")[1].split("META:")[0].strip()
-            meta = response.split("META:")[1].split("TAGS:")[0].strip()
-            tags = response.split("TAGS:")[1].split("PROMPT:")[0].strip()
-            img_p = response.split("PROMPT:")[1].strip()
-
-            img_url = f"https://pollinations.ai/p/{img_p.replace(' ', '_')}?width=1024&height=768&model=flux"
-
-            # Database Update with category
-            cursor.execute('''
-                UPDATE news_articles 
-                SET rewritten_content=?, category=?, seo_description=?, seo_tags=?, image_url=?
-                WHERE id=?
-            ''', (content, category, meta, tags, img_url, art_id))
+        for category, url in sources.items():
+            st.write(f"📡 Fetching: {category}")
+            response = requests.get(url, timeout=10)
+            # 'lxml-xml' parser use kiya gaya hai fast processing ke liye
+            soup = BeautifulSoup(response.content, 'lxml-xml') 
+            items = soup.find_all('item')
             
-            conn.commit()
-            print(f"✅ Success! Article {art_id} categorized as {category}")
-
-        except Exception as e:
-            print(f"❌ Error in article {art_id}: {e}")
-
-    conn.close()
+            for item in items[:10]: # Har category se top 10
+                title = item.title.text
+                summary = item.description.text if item.description else "No context available"
+                
+                # Check duplicate title before inserting
+                cursor.execute("SELECT id FROM news_articles WHERE title = ?", (title,))
+                if not cursor.fetchone():
+                    cursor.execute(
+                        "INSERT INTO news_articles (title, raw_content, status) VALUES (?, ?, ?)",
+                        (title, summary, 'pending')
+                    )
+                    total_count += 1
+        
+        conn.commit()
+        conn.close()
+        st.success(f"✅ SUCCESS: Total {total_count} articles database mein save ho gaye!")
+        
+    except Exception as e:
+        st.error(f"❌ Error during fetching: {e}")
 
 if __name__ == "__main__":
-    rewrite_news()
+    fetch_news()

@@ -1,84 +1,69 @@
 import streamlit as st
 import sqlite3
 import os
-import requests
-import base64
 
-# --- CONFIG & PATHS ---
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, 'database.db')
+# --- PATHS ---
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'database.db')
 
-# Secrets (Square brackets fix)
-WP_SITE_URL = st.secrets["WP_SITE_URL"].strip("/")
-WP_USER = st.secrets["WP_USERNAME"]
-WP_APP_PASSWORD = st.secrets["WP_APP_PASSWORD"]
-WP_API_URL = f"{WP_SITE_URL}/wp-json/wp/v2/posts"
+st.set_page_config(page_title="SEO News Admin", layout="wide")
 
-st.set_page_config(page_title="AI News Admin Pro", layout="wide")
-
-# --- DATABASE FIX: Table ensure karne ke liye logic ---
-def init_db():
+# Sidebar for manual repair
+if st.sidebar.button("🛠️ Repair DB & Columns"):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
+    # Table ko naye columns ke saath ensure karna
     cursor.execute('''CREATE TABLE IF NOT EXISTS news_articles (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, 
-        title TEXT, raw_content TEXT, rewritten_content TEXT,
-        image_url TEXT, seo_description TEXT, seo_tags TEXT, 
-        category TEXT, status TEXT DEFAULT 'pending'
+        id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, raw_content TEXT, 
+        rewritten_content TEXT, image_url TEXT, seo_description TEXT, 
+        seo_tags TEXT, category TEXT, status TEXT DEFAULT 'pending'
     )''')
     conn.commit()
     conn.close()
+    st.sidebar.success("Database structure fixed!")
 
-# SIDEBAR
-with st.sidebar:
-    st.header("⚡ Action Center")
-    if st.button("📡 Fetch News", width="stretch"): # Updated parameter
-        from agents.news_fetcher import fetch_news
-        fetch_news()
-        st.success("News Fetched!")
-        st.rerun()
-    
-    if st.button("🪄 AI Rewrite", type="primary", width="stretch"):
-        from agents.ai_rewriter import rewrite_news
-        rewrite_news()
-        st.success("AI Processing Complete!")
-        st.rerun()
-    
-    st.divider()
-    if st.button("🛠️ Repair Database", width="stretch"):
-        init_db()
-        st.sidebar.success("Database Table Created!")
-
-init_db() # Run at startup
-st.title("🗞️ AI News Content Manager")
-
-tab1, tab2, tab3 = st.tabs(["⏳ Pending Review", "✅ Published", "❌ Rejected"])
+st.title("🗞️ News SEO Manager")
 
 if os.path.exists(DB_PATH):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
     
-    with tab1:
-        # SQL error fixed by ensuring table existence
-        cursor.execute("SELECT id, title, rewritten_content, image_url, category FROM news_articles WHERE status='pending' AND rewritten_content IS NOT NULL")
-        posts = cursor.fetchall()
-        
-        if not posts:
-            st.info("Koi rewritten news nahi hai. Sidebar se trigger karein.")
-        
-        for pid, title, content, img, cat in posts:
-            with st.expander(f"📦 [{cat}] - {title}", expanded=False):
-                if content == "Not Generated": # Fix for image_79df3e.png
-                    st.warning("AI ne is article ko sahi se parse nahi kiya. Dobara Rewrite karein.")
+    # FIX: Saare columns ko SELECT query mein add kiya
+    cursor.execute("""
+        SELECT id, title, rewritten_content, image_url, seo_description, seo_tags, category 
+        FROM news_articles 
+        WHERE status='pending' AND rewritten_content IS NOT NULL
+    """)
+    posts = cursor.fetchall()
+    
+    if not posts:
+        st.info("Pending articles with AI content nahi mile. Pehle 'Rewrite' chalaein.")
+    
+    for pid, title, content, img, desc, tags, cat in posts:
+        with st.expander(f"📦 [{cat}] - {title}", expanded=True):
+            col1, col2 = st.columns([1, 2])
+            
+            with col1:
+                # Featured Image
+                if img and img != "Not Generated":
+                    st.image(img, width="stretch", caption="AI Image")
                 else:
-                    f_title = st.text_input("Headline", value=title, key=f"t{pid}")
-                    c1, c2 = st.columns([1, 2])
-                    with c1:
-                        if img: st.image(img, width="stretch") # Updated param
-                    with c2:
-                        f_content = st.text_area("Content", value=content, height=350, key=f"c{pid}")
-                        if st.button("🚀 Publish Now", key=f"p{pid}", type="primary"):
-                            # WP publish logic yahan aayegi
-                            cursor.execute("UPDATE news_articles SET status='published' WHERE id=?", (pid,))
-                            conn.commit(); st.rerun()
+                    st.warning("🖼️ Image URL missing.")
+                
+                # SEO Meta Fields
+                st.subheader("🛠️ SEO & Meta")
+                new_cat = st.text_input("Category", value=str(cat), key=f"cat_{pid}")
+                new_desc = st.text_area("Meta Description", value=str(desc), key=f"desc_{pid}")
+                new_tags = st.text_input("SEO Tags", value=str(tags), key=f"tags_{pid}")
+                
+            with col2:
+                # Content Editor
+                st.subheader("🖋️ Article Body")
+                new_title = st.text_input("Edit Headline", value=title, key=f"tit_{pid}")
+                new_content = st.text_area("Edit Body", value=content, height=400, key=f"con_{pid}")
+                
+                if st.button("🚀 Publish", key=f"pub_{pid}", type="primary"):
+                    # WordPress publishing logic here...
+                    cursor.execute("UPDATE news_articles SET status='published' WHERE id=?", (pid,))
+                    conn.commit()
+                    st.rerun()
     conn.close()

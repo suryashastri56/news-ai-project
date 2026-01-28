@@ -2,6 +2,7 @@ import streamlit as st
 import sqlite3
 import os
 import requests
+from bs4 import BeautifulSoup
 import base64
 import json
 
@@ -9,60 +10,83 @@ import json
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, 'database.db')
 
-# FIX: Secrets syntax corrected using square brackets []
+# Streamlit Secrets (Square brackets fix)
 SITE_URL = st.secrets["WP_SITE_URL"].strip("/")
 WP_URL = f"{SITE_URL}/wp-json/wp/v2/posts"
 WP_USER = st.secrets["WP_USERNAME"]
 WP_APP_PASSWORD = st.secrets["WP_APP_PASSWORD"]
 
-st.set_page_config(page_title="AI News Admin", layout="wide")
-st.title("🤖 AI News Content Manager")
+st.set_page_config(page_title="AI News Admin Pro", layout="wide")
 
-# Mapping function
-def get_category_id(cat_name):
-    mapping = {"Business": 6, "Entertainment": 13, "Health": 14, "Sports": 7, "India": 2, "Technology": 1}
-    return mapping.get(cat_name.strip(), 1)
+# --- NEWS FETCHER LOGIC ---
+def run_fetcher():
+    sources = {
+        "General": "https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en",
+        "Technology": "https://news.google.com/rss/search?q=technology&hl=en-IN&gl=IN&ceid=IN:en",
+        "Business": "https://news.google.com/rss/search?q=business&hl=en-IN&gl=IN&ceid=IN:en"
+    }
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    new_count = 0
+    for cat, url in sources.items():
+        try:
+            res = requests.get(url, timeout=10)
+            soup = BeautifulSoup(res.content, 'lxml-xml')
+            for item in soup.find_all('item')[:10]:
+                title = item.title.text
+                cursor.execute("SELECT id FROM news_articles WHERE title=?", (title,))
+                if not cursor.fetchone():
+                    cursor.execute("INSERT INTO news_articles (title, raw_content, status) VALUES (?, ?, ?)", 
+                                   (title, item.description.text, 'pending'))
+                    new_count += 1
+        except: continue
+    conn.commit()
+    conn.close()
+    return new_count
 
-def publish_to_wp(title, content, img_url, excerpt, tags, category_name):
+# --- WP PUBLISH LOGIC ---
+def publish_to_wp(title, content, img_url, excerpt, cat_name):
     credentials = f"{WP_USER}:{WP_APP_PASSWORD}"
     token = base64.b64encode(credentials.encode()).decode()
     headers = {'Authorization': f'Basic {token}', 'Content-Type': 'application/json'}
-    # Justified Content
     html_body = f'<figure class="wp-block-image"><img src="{img_url}"/></figure><div style="text-align:justify">{content.replace("\n", "<br>")}</div>'
-    post_data = {
-        'title': title, 'content': html_body, 'excerpt': excerpt,
-        'categories': [get_category_id(category_name)], 'status': 'publish'
-    }
+    data = {'title': title, 'content': html_body, 'excerpt': excerpt, 'status': 'publish'}
     try:
-        res = requests.post(WP_URL, headers=headers, json=post_data, timeout=30)
-        return res.status_code == 201, res.text
-    except Exception as e: return False, str(e)
+        r = requests.post(WP_URL, headers=headers, json=data, timeout=30)
+        return r.status_code == 201
+    except: return False
 
-# --- UI TABS ---
-tab1, tab2, tab3 = st.tabs(["⏳ Pending Articles", "✅ Published", "❌ Rejected"])
+# --- UI LAYOUT ---
+st.title("🗞️ AI News Content Manager")
+
+# Sidebar for Controls
+with st.sidebar:
+    st.header("Controls")
+    if st.button("🔄 Fetch New News", use_container_width=True):
+        count = run_fetcher()
+        st.success(f"{count} naye articles mile!")
+        st.rerun()
+
+tab1, tab2, tab3 = st.tabs(["⏳ Pending Review", "✅ Published", "❌ Rejected"])
 
 if os.path.exists(DB_PATH):
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    
+
     with tab1:
         cursor.execute("SELECT id, title, rewritten_content, image_url, seo_description, seo_tags, category FROM news_articles WHERE status='pending' AND rewritten_content IS NOT NULL")
-        posts = cursor.fetchall()
-        if not posts: st.info("Abhi koi pending news nahi hai.")
-        for pid, title, content, img_url, seo_desc, seo_tags, category in posts:
-            with st.expander(f"📦 [{category}] - {title}", expanded=True):
-                # TITLE EDITING SUPPORT
-                final_title = st.text_input("Edit Headline:", value=title, key=f"t_{pid}")
-                col1, col2 = st.columns([1, 2])
-                with col1:
-                    if img_url: st.image(img_url, use_container_width=True)
-                    f_desc = st.text_area("Meta Description:", str(seo_desc), key=f"d_{pid}")
-                    f_tags = st.text_input("Tags:", str(seo_tags), key=f"tg_{pid}")
-                with col2:
-                    f_content = st.text_area("Edit Body:", str(content), height=350, key=f"c_{pid}")
-                    if st.button(f"🚀 Publish", key=f"pub_{pid}"):
-                        success, msg = publish_to_wp(final_title, f_content, img_url, f_desc, f_tags, category)
-                        if success:
+        for pid, title, content, img, desc, tags, cat in cursor.fetchall():
+            with st.expander(f"📦 {title}", expanded=True):
+                final_title = st.text_input("Headline:", value=title, key=f"t{pid}")
+                c1, c2 = st.columns([1, 2])
+                with c1:
+                    if img: st.image(img, use_container_width=True)
+                    f_desc = st.text_area("Meta:", str(desc), key=f"d{pid}")
+                    f_tags = st.text_input("Tags:", str(tags), key=f"tg{pid}")
+                with c2:
+                    f_content = st.text_area("Body:", str(content), height=350, key=f"c{pid}")
+                    if st.button("🚀 Publish", key=f"pb{pid}"):
+                        if publish_to_wp(final_title, f_content, img, f_desc, cat):
                             cursor.execute("UPDATE news_articles SET status='published' WHERE id=?", (pid,))
                             conn.commit(); st.rerun()
     conn.close()

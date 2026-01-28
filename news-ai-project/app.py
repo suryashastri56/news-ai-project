@@ -1,52 +1,20 @@
 import streamlit as st
 import sqlite3
 import os
-import requests
-import base64
-from bs4 import BeautifulSoup
 
-# --- CONFIG & PATHS ---
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.path.join(BASE_DIR, 'database.db')
+# --- CONFIG ---
+DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'database.db')
 
-# FIX: Secrets accessed with [] instead of ()
-WP_SITE_URL = st.secrets["WP_SITE_URL"].strip("/")
-WP_USER = st.secrets["WP_USERNAME"]
-WP_APP_PASSWORD = st.secrets["WP_APP_PASSWORD"]
-WP_API_URL = f"{WP_SITE_URL}/wp-json/wp/v2/posts"
+st.set_page_config(page_title="News Admin", layout="wide")
+st.title("🗞️ News Manager (Category Fix)")
 
-st.set_page_config(page_title="AI News Admin Pro", layout="wide")
-
-# --- DATABASE AUTO-INIT ---
-def init_db():
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute('''CREATE TABLE IF NOT EXISTS news_articles (
-        id INTEGER PRIMARY KEY AUTOINCREMENT, 
-        title TEXT, raw_content TEXT, rewritten_content TEXT,
-        image_url TEXT, seo_description TEXT, seo_tags TEXT, 
-        category TEXT, status TEXT DEFAULT 'pending'
-    )''')
-    conn.commit()
-    conn.close()
-
-# Sidebar Controls
+# Sidebar Action Center
 with st.sidebar:
-    st.header("⚡ Action Center")
-    if st.button("📡 Fetch News", width="stretch"): # Updated parameter
+    st.header("Admin Panel")
+    if st.button("📡 Fetch New News", width="stretch"):
         from agents.news_fetcher import fetch_news
         fetch_news()
-        st.success("News Fetched!")
         st.rerun()
-    
-    if st.button("🪄 Rewrite Articles", type="primary", width="stretch"):
-        from agents.ai_rewriter import rewrite_news
-        rewrite_news()
-        st.success("AI Rewriting Done!")
-        st.rerun()
-
-init_db() # App start hote hi table ensure karein
-st.title("🗞️ AI News Content Manager")
 
 tab1, tab2, tab3 = st.tabs(["⏳ Pending Review", "✅ Published", "❌ Rejected"])
 
@@ -55,28 +23,44 @@ if os.path.exists(DB_PATH):
     cursor = conn.cursor()
     
     with tab1:
-        # Table error resolved
-        cursor.execute("SELECT id, title, rewritten_content, image_url, seo_description, seo_tags, category FROM news_articles WHERE status='pending'")
+        # Category column ko query mein shamil kiya gaya
+        cursor.execute("""
+            SELECT id, title, rewritten_content, image_url, seo_description, seo_tags, category 
+            FROM news_articles 
+            WHERE status='pending' AND rewritten_content IS NOT NULL
+        """)
         posts = cursor.fetchall()
         
         if not posts:
-            st.info("Abhi koi pending news nahi hai.")
-        
+            st.info("No rewritten articles found. Sidebar se 'Rewrite' dabayein.")
+            
         for pid, title, content, img, desc, tags, cat in posts:
-            with st.expander(f"📦 {title}", expanded=True):
-                if not content:
-                    st.warning("Article abhi rewrite nahi hua hai. Sidebar se 'Rewrite' dabayein.")
-                else:
-                    # Headline & Body Editor
-                    f_title = st.text_input("Headline", value=title, key=f"t{pid}")
-                    c1, c2 = st.columns([1, 1.5])
-                    with c1:
-                        if img: st.image(img, width="stretch") # Updated param
-                        f_desc = st.text_area("Meta Description", value=str(desc), key=f"d{pid}")
-                    with c2:
-                        f_content = st.text_area("Article Body", value=str(content), height=400, key=f"c{pid}")
-                        if st.button("🚀 Publish Now", key=f"p{pid}", type="primary"):
-                            # WP publish logic...
-                            cursor.execute("UPDATE news_articles SET status='published' WHERE id=?", (pid,))
-                            conn.commit(); st.rerun()
+            # Category ko Expandable Title mein add kiya
+            with st.expander(f"📦 [{cat}] - {title}", expanded=True):
+                
+                # Category Dropdown Selection
+                all_cats = ["Technology", "Business", "Sports", "India", "General", "Entertainment", "Health"]
+                try:
+                    cat_index = all_cats.index(cat) if cat in all_cats else 0
+                except: cat_index = 0
+                
+                new_cat = st.selectbox("Update Category:", all_cats, index=cat_index, key=f"cat_{pid}")
+                
+                col1, col2 = st.columns([1, 1.5])
+                with col1:
+                    if img: st.image(img, width="stretch")
+                    st.subheader("SEO Meta")
+                    f_desc = st.text_area("Meta Desc", value=str(desc), key=f"d_{pid}")
+                    f_tags = st.text_input("SEO Tags", value=str(tags), key=f"tg_{pid}")
+                
+                with col2:
+                    st.subheader("Article Body")
+                    f_title = st.text_input("Edit Headline", value=title, key=f"t_{pid}")
+                    f_content = st.text_area("Edit Content", value=str(content), height=400, key=f"c_{pid}")
+                    
+                    if st.button(f"🚀 Publish to {new_cat}", key=f"pub_{pid}", type="primary"):
+                        # Publishing logic yahan category ke saath jayegi
+                        cursor.execute("UPDATE news_articles SET status='published', category=? WHERE id=?", (new_cat, pid))
+                        conn.commit()
+                        st.rerun()
     conn.close()

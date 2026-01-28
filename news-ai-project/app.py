@@ -73,6 +73,17 @@ with st.sidebar:
             count = run_fetcher()
             st.success(f"{count} naye articles mile!")
             st.rerun()
+        
+with st.sidebar:
+    st.header("Admin Controls")
+    # ... (Fetch News Button) ...
+    if st.button("🪄 Rewrite All Pending", use_container_width=True):
+        with st.spinner("AI is rewriting articles... Please wait."):
+            # Yahan ai_rewriter ka function call hoga
+            from agents.ai_rewriter import rewrite_news
+            rewrite_news()
+            st.success("Articles Rewritten! Refreshing...")
+            st.rerun()
 
 tab1, tab2, tab3 = st.tabs(["⏳ Pending Articles", "✅ Published", "❌ Rejected"])
 

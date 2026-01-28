@@ -1,8 +1,8 @@
 import streamlit as st
 import sqlite3
 import os
-from sidebar_actions import render_sidebar # Sidebar module
-from article_editor import show_editor      # UI Editor module
+from sidebar_actions import render_sidebar 
+from article_editor import show_editor      # Line ke shuruat mein koi space na rakhein
 
 st.set_page_config(page_title="News AI Pro", layout="wide")
 

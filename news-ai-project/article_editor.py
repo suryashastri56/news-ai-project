@@ -6,15 +6,13 @@ def show_editor(pid, title, content, img, cat, desc, tags, cursor, conn):
         # SEO & Image Section
         col1, col2 = st.columns([1, 2])
         
-        with col1:
-            if img and img != "Not Generated":
-                st.image(img, width="stretch", caption="AI Featured Image") #
-            
-            st.subheader("🛠️ SEO & Meta")
-            f_cat = st.selectbox("Category", ["Technology", "Business", "Sports", "India", "General"], 
-                                 index=0, key=f"cat_{pid}")
-            f_desc = st.text_area("Meta Description", value=str(desc), key=f"desc_{pid}")
-            f_tags = st.text_input("SEO Tags", value=str(tags), key=f"tags_{pid}")
+       # article_editor.py mein image display logic
+    with col1:
+    if img:
+        # width="stretch" for new Streamlit standard
+        st.image(img, width="stretch", caption="📸 AI Generated Visual")
+    else:
+        st.warning("No image found for this article.")
             
         with col2:
             st.subheader("🖋️ Content Editor")

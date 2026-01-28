@@ -14,7 +14,7 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, 'database.db')
 
 # WordPress Credentials from Secrets/Env
-SITE_URL = st.secrets("WP_SITE_URL", "").strip("/")
+SITE_URL = st.secrets["WP_SITE_URL"].strip("/")
 WP_URL = f"{SITE_URL}/wp-json/wp/v2/posts"
 WP_USER = st.secrets("WP_USERNAME")
 WP_APP_PASSWORD = st.secrets("WP_APP_PASSWORD")

@@ -8,7 +8,6 @@ import os
 import re
 import time
 import streamlit as st # Secrets access karne ke liye
-from groq import Groq
 
 # --- CONFIG & PATHS ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))

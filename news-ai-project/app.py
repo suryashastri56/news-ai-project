@@ -4,18 +4,21 @@ import os
 import requests
 import base64
 import json
-from dotenv import load_dotenv
+import os
+import re
+import time
+import streamlit as st # Secrets access karne ke liye
+from groq import Groq
 
 # --- CONFIG & PATHS ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, 'database.db')
-load_dotenv(os.path.join(BASE_DIR, '.env'))
 
 # WordPress Credentials from Secrets/Env
-SITE_URL = os.getenv("WP_SITE_URL", "").strip("/")
+SITE_URL = st.secrets("WP_SITE_URL", "").strip("/")
 WP_URL = f"{SITE_URL}/wp-json/wp/v2/posts"
-WP_USER = os.getenv("WP_USERNAME")
-WP_APP_PASSWORD = os.getenv("WP_APP_PASSWORD")
+WP_USER = st.secrets("WP_USERNAME")
+WP_APP_PASSWORD = st.secrets("WP_APP_PASSWORD")
 
 st.set_page_config(page_title="AI News Admin", layout="wide")
 st.title("🤖 AI News Content Manager")
@@ -26,11 +29,15 @@ def get_category_id(cat_name):
     """WordPress Category Name to ID Mapping"""
     # NOTE: Replace these numbers with your actual WordPress Category IDs
     mapping = {
-        "Technology": 123, 
-        "Business": 125,
-        "Sports": 126,
-        "Science": 124,
-        "General": 1
+       "Business": 6,
+        "Entertainment":13,
+        "Health":14, 
+        "Sports": 7,
+        "Science": 8,
+        "General": 1,
+        "World":10,
+        "India":2
+
     }
     return mapping.get(cat_name.strip(), 1)
 

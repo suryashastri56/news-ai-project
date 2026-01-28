@@ -22,6 +22,7 @@ def publish_to_wp(title, content, img_url, excerpt, cat_name):
         # Category Mapping
         mapping = { "Business": 6,
         "Entertainment":13,
+                   "Technology":5,
         "Health":14, 
         "Sports": 7,
         "Science": 8,

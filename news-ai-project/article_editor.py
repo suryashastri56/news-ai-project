@@ -7,11 +7,11 @@ def show_editor(pid, title, content, img, cat, desc, tags, cursor, conn):
         col1, col2 = st.columns([1, 2])
         
        # article_editor.py mein image display logic
-    with col1:
-    if img:
+        with col1:
+        if img:
         # width="stretch" for new Streamlit standard
         st.image(img, width="stretch", caption="📸 AI Generated Visual")
-    else:
+        else:
         st.warning("No image found for this article.")
             
         with col2:

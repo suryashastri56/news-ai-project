@@ -4,53 +4,54 @@ from bs4 import BeautifulSoup
 import os
 import streamlit as st
 
-# Path configuration for Streamlit Cloud
+# Path configuration
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, '..', 'database.db')
 
 def fetch_news():
-    st.write("🚀 News fetching shuru ho rahi hai...")
+    st.write("📡 Connecting to Google News RSS...")
     
-    # Diverse news sources
+    # Updated RSS feeds
     sources = {
-        "General": "https://news.google.com/rss?hl=en-IN&gl=IN&ceid=IN:en",
         "Technology": "https://news.google.com/rss/search?q=technology&hl=en-IN&gl=IN&ceid=IN:en",
         "Business": "https://news.google.com/rss/search?q=business&hl=en-IN&gl=IN&ceid=IN:en",
-        "Sports": "https://news.google.com/rss/search?q=sports&hl=en-IN&gl=IN&ceid=IN:en",
-        "India": "https://news.google.com/rss/search?q=india&hl=en-IN&gl=IN&ceid=IN:en"
+        "India": "https://news.google.com/rss/search?q=india&hl=en-IN&gl=IN&ceid=IN:en",
+        "Sports": "https://news.google.com/rss/search?q=sports&hl=en-IN&gl=IN&ceid=IN:en"
     }
     
     try:
         conn = sqlite3.connect(DB_PATH)
         cursor = conn.cursor()
-        total_count = 0
-        
+        new_articles_count = 0
+
         for category, url in sources.items():
-            st.write(f"📡 Fetching: {category}")
-            response = requests.get(url, timeout=10)
-            # 'lxml-xml' parser use kiya gaya hai fast processing ke liye
-            soup = BeautifulSoup(response.content, 'lxml-xml') 
-            items = soup.find_all('item')
-            
-            for item in items[:10]: # Har category se top 10
-                title = item.title.text
-                summary = item.description.text if item.description else "No context available"
-                
-                # Check duplicate title before inserting
-                cursor.execute("SELECT id FROM news_articles WHERE title = ?", (title,))
-                if not cursor.fetchone():
-                    cursor.execute(
-                        "INSERT INTO news_articles (title, raw_content, status) VALUES (?, ?, ?)",
-                        (title, summary, 'pending')
-                    )
-                    total_count += 1
+            try:
+                response = requests.get(url, timeout=10)
+                # Parse with lxml-xml for RSS compatibility
+                soup = BeautifulSoup(response.content, 'lxml-xml')
+                items = soup.find_all('item')
+
+                for item in items[:10]: # Top 10 articles per category
+                    title = item.title.text
+                    summary = item.description.text if item.description else "No context found."
+                    
+                    # Duplicate check
+                    cursor.execute("SELECT id FROM news_articles WHERE title = ?", (title,))
+                    if not cursor.fetchone():
+                        # Category insert karna bahut zaroori hai
+                        cursor.execute(
+                            "INSERT INTO news_articles (title, raw_content, category, status) VALUES (?, ?, ?, ?)",
+                            (title, summary, category, 'pending')
+                        )
+                        new_articles_count += 1
+            except Exception as e:
+                st.warning(f"⚠️ {category} fetch fail: {e}")
+                continue
         
         conn.commit()
         conn.close()
-        st.success(f"✅ SUCCESS: Total {total_count} articles database mein save ho gaye!")
-        
-    except Exception as e:
-        st.error(f"❌ Error during fetching: {e}")
+        return new_articles_count
 
-if __name__ == "__main__":
-    fetch_news()
+    except Exception as e:
+        st.error(f"❌ Database Error: {e}")
+        return 0

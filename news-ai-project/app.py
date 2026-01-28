@@ -6,11 +6,12 @@ import base64
 import json
 from dotenv import load_dotenv
 
-# --- CONFIG ---
+# --- CONFIG & PATHS ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, 'database.db')
 load_dotenv(os.path.join(BASE_DIR, '.env'))
 
+# WordPress Credentials from Secrets/Env
 SITE_URL = os.getenv("WP_SITE_URL", "").strip("/")
 WP_URL = f"{SITE_URL}/wp-json/wp/v2/posts"
 WP_USER = os.getenv("WP_USERNAME")
@@ -19,13 +20,30 @@ WP_APP_PASSWORD = os.getenv("WP_APP_PASSWORD")
 st.set_page_config(page_title="AI News Admin", layout="wide")
 st.title("🤖 AI News Content Manager")
 
-# --- DB FUNCTIONS ---
+# --- HELPER FUNCTIONS ---
+
+def get_category_id(cat_name):
+    """WordPress Category Name to ID Mapping"""
+    # NOTE: Replace these numbers with your actual WordPress Category IDs
+    mapping = {
+        "Technology": 123, 
+        "Business": 125,
+        "Sports": 126,
+        "Science": 124,
+        "General": 1
+    }
+    return mapping.get(cat_name.strip(), 1)
+
 def get_posts_by_status(status):
+    """Database se articles fetch karna"""
     if not os.path.exists(DB_PATH): return []
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    # SEO Description aur Tags fetch karna
-    cursor.execute("SELECT id, title, rewritten_content, image_url, seo_description, seo_tags FROM news_articles WHERE status=?", (status,))
+    # Category column ko include kiya gaya hai
+    cursor.execute("""
+        SELECT id, title, rewritten_content, image_url, seo_description, seo_tags, category 
+        FROM news_articles WHERE status=?
+    """, (status,))
     rows = cursor.fetchall()
     conn.close()
     return rows
@@ -37,22 +55,24 @@ def update_status(pid, new_status):
     conn.commit()
     conn.close()
 
-def publish_to_wp(title, content, img_url, excerpt, tags):
+def publish_to_wp(title, content, img_url, excerpt, tags, category_name):
+    """WordPress REST API Publishing"""
     credentials = f"{WP_USER}:{WP_APP_PASSWORD}"
     token = base64.b64encode(credentials.encode())
-    headers = {'Authorization': f'Basic {token.decode()}', 'Content-Type': 'application/json'}
+    headers = {
+        'Authorization': f'Basic {token.decode()}', 
+        'Content-Type': 'application/json'
+    }
     
-    # Block-style HTML for WordPress
+    # HTML Body with Image
     html_body = f'<figure class="wp-block-image"><img src="{img_url}"/></figure><p>{str(content).replace("\n", "<br>")}</p>'
     
-    # WordPress API fix: 'tags' field ko hata diya gaya hai kyunki wo IDs mangta hai
-    # Tags ko hum 'excerpt' ke end mein add kar rahe hain SEO ke liye
-    full_excerpt = f"{excerpt}\n\nKeywords: {tags}"
-    
+    # Post Data with Category ID
     post_data = {
         'title': title,
         'content': html_body,
-        'excerpt': full_excerpt,
+        'excerpt': f"{excerpt}\n\nKeywords: {tags}",
+        'categories': [get_category_id(category_name)],
         'status': 'publish'
     }
     
@@ -66,38 +86,42 @@ def publish_to_wp(title, content, img_url, excerpt, tags):
 tab1, tab2, tab3 = st.tabs(["⏳ Pending Articles", "✅ Published", "❌ Rejected"])
 
 with tab1:
-    pending_posts = get_posts_by_status('pending')
-    if not pending_posts:
-        st.info("No pending articles found.")
-    for pid, title, content, img_url, seo_desc, seo_tags in pending_posts:
-        with st.expander(f"📝 {title}", expanded=True):
+    posts = get_posts_by_status('pending')
+    if not posts:
+        st.info("Abhi koi pending news nahi hai. Automation ka intezar karein.")
+    
+    for pid, title, content, img_url, seo_desc, seo_tags, category in posts:
+        # Title ke sath Category badge
+        with st.expander(f"📦 [{category}] - {title}", expanded=False):
             col1, col2 = st.columns([1, 2])
+            
             with col1:
-                # Use standard Pollinations if current image fails
-                if img_url: st.image(img_url, width=350)
+                if img_url: st.image(img_url, use_container_width=True)
+                st.info(f"📂 **Target Category:** {category}")
                 
                 st.subheader("SEO Meta Details")
-                # Handle 'None' values safely
-                disp_desc = str(seo_desc) if seo_desc else "No description generated."
-                disp_tags = str(seo_tags) if seo_tags else "news, trending"
-                
-                final_seo_desc = st.text_area("Meta Description:", disp_desc, height=100, key=f"seo_{pid}")
-                final_tags = st.text_input("Tags:", disp_tags, key=f"tags_{pid}")
+                final_desc = st.text_area("Meta Description:", str(seo_desc), key=f"d_{pid}")
+                final_tags = st.text_input("Tags:", str(seo_tags), key=f"t_{pid}")
                 
                 if st.button(f"🗑️ Reject", key=f"rej_{pid}"):
                     update_status(pid, 'rejected')
                     st.rerun()
             
             with col2:
-                edited_content = st.text_area("Content:", str(content), height=350, key=f"ed_{pid}")
-                if st.button(f"🚀 Publish to WordPress", key=f"pub_{pid}"):
-                    success, msg = publish_to_wp(title, edited_content, img_url, final_seo_desc, final_tags)
+                edited_content = st.text_area("Edit Content:", str(content), height=400, key=f"ed_{pid}")
+                if st.button(f"🚀 Publish to {category}", key=f"pub_{pid}"):
+                    success, msg = publish_to_wp(title, edited_content, img_url, final_desc, final_tags, category)
                     if success:
                         update_status(pid, 'published')
-                        st.success("Mubarak ho! Post live ho gaya.")
+                        st.success(f"Mubarak ho! Article '{category}' page par live hai.")
                         st.rerun()
-                    else: st.error(f"Error: {msg}")
+                    else:
+                        st.error(f"WordPress Error: {msg}")
 
 with tab2:
-    for pid, title, content, img_url, d, t in get_posts_by_status('published'):
-        st.write(f"✅ **{title}**")
+    for pid, title, content, img_url, d, t, cat in get_posts_by_status('published'):
+        st.write(f"✅ **[{cat}]** {title}")
+
+with tab3:
+    for pid, title, content, img_url, d, t, cat in get_posts_by_status('rejected'):
+        st.write(f"❌ **[{cat}]** {title}")
